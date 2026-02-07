@@ -1,0 +1,19 @@
+// To lowercase!
+
+
+((sin\(|cos\(|tan\( )|[0-9\.\+\-*^%/\(\)])+
+
+((ceil\(|fabs\(|factorial\(|floor\(|exp\(|log\(|sqrt\(|acos\(|asin\(|atan\(|cos\(|sin\(|tan\(|degrees\(|radians\()|[0-9\.\+\-*^%/\(\)])
+
+((ceil\(|fabs\(|factorial\(|floor\(|exp\(|log\(|sqrt\(|acos\(|asin\(|atan\(|cos\(|sin\(|tan\(|degrees\(|radians\()|[0-9\.\+\-*^%/\(\) ])+
+
+((ceil\(|fabs\(|factorial\(|floor\(|exp\(|log\(|sqrt\(|acos\(|asin\(|atan\(|cos\(|sin\(|tan\(|degrees\(|radians\()|[0-9\.\+\-*^%/\(\)])
+
+
+((ceil\(|fabs\(|factorial\(|floor\(|exp\(|log\(|sqrt\(|acos\(|asin\(|atan\(|cos\(|sin\(|tan\(|degrees\(|radians\()|[0-9\.\+\-*^%/\(\)])((ceil\(|fabs\(|factorial\(|floor\(|exp\(|log\(|sqrt\(|acos\(|asin\(|atan\(|cos\(|sin\(|tan\(|degrees\(|radians\()|[0-9\.\+\-*^%/\(\) ])+((ceil\(|fabs\(|factorial\(|floor\(|exp\(|log\(|sqrt\(|acos\(|asin\(|atan\(|cos\(|sin\(|tan\(|degrees\(|radians\()|[0-9\.\+\-*^%/\(\)])
+
+
+((sin\(|cos\(|tan\( )|[0-9\.\+\-*^%/\(\)])+						5 + 5								sin(30 + 10 (-5^8) / 10 20 + 100 * 50)						whichLionRealisticCallout = new Callout({bitmap: Assets.vote_which_lion_looks_realistic_callout, x: (1920 - (2 * 160)) / 2,  parent: this});			
+
+
+((sin\(|cos\(|tan\( )|[0-9\.\+\-*^/\(\)])((sin\(|cos\(|tan\()|[0-9\.\+\-*^/\(\) ])+
