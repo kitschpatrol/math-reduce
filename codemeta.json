@@ -1,9 +1,9 @@
 {
   "@context": "https://w3id.org/codemeta/3.1",
   "@type": "SoftwareSourceCode",
-  "name": "MathReduce",
+  "name": "Math Reduce",
   "identifier": "com.kitschpatrol.MathReduce",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "A system-wide macOS service to turn any text field into a calculator.",
   "author": {
     "@type": "Person",
@@ -11,18 +11,9 @@
     "name": "Eric Mika",
     "url": "https://ericmika.com"
   },
-  "keywords": [
-    "macos",
-    "objective-c",
-    "calculator",
-    "service",
-    "text",
-    "utility"
-  ],
-  "programmingLanguage": "Objective-C",
-  "operatingSystem": [
-    "macOS"
-  ],
+  "keywords": ["macos", "swift", "calculator", "service", "text", "utility"],
+  "programmingLanguage": "Swift",
+  "operatingSystem": ["macOS 15 or later"],
   "url": "https://github.com/kitschpatrol/math-reduce",
   "codeRepository": "https://github.com/kitschpatrol/math-reduce.git",
   "issueTracker": "https://github.com/kitschpatrol/math-reduce/issues",
@@ -33,11 +24,12 @@
       "@type": "SoftwareSourceCode",
       "name": "DDMathParser",
       "codeRepository": "https://github.com/davedelong/DDMathParser.git",
-      "version": "1.1"
+      "version": "2e067fc17c36f4298649b6681d52286fe4ca388e"
     },
     {
       "@type": "SoftwareApplication",
-      "name": "Xcode"
+      "name": "Xcode",
+      "version": "26 or later (Swift 6.2)"
     }
   ]
 }

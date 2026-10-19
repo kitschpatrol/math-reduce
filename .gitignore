@@ -1,3 +1,13 @@
+# Local configuration and build products
+.env
+.env.*
+!.template.env
+.build/
+.swiftpm/
+dist/
+fastlane/report.xml
+fastlane/README.md
+
 # Xcode
 .DS_Store
 build/

@@ -1,0 +1,183 @@
+# frozen_string_literal: true
+
+require_relative 'lib/project'
+
+fastlane_version '2.239.0'
+default_platform :mac
+opt_out_usage
+skip_docs
+
+def project
+  @project ||= MathReduceProject.new(File.expand_path('..', __dir__), self)
+end
+
+platform :mac do
+  desc 'Populate .env from 1Password and store notarization credentials in Keychain'
+  lane :setup do
+    project.run('op', 'inject', '-i', '.template.env', '-o', '.env', '--file-mode', '0600', '--force')
+    # Read the newly generated values; fastlane loaded any previous .env at startup.
+    require 'dotenv'
+    config = Dotenv.parse(project.path('.env'))
+    %w[NOTARYTOOL_PROFILE APP_STORE_DEV_KEY_ID APP_STORE_DEV_KEY_NAME APP_STORE_DEV_KEY_ISSUER_ID].each do |key|
+      UI.user_error!("Missing #{key} in the generated .env.") if config.fetch(key, '').empty?
+    end
+    Dir.mktmpdir('math-reduce-notary-') do |directory|
+      key_file = File.join(directory, 'AuthKey.p8')
+      project.run('op', 'read', 'op://Personal/Apple/APP_STORE_DEV_KEY', '--out-file', key_file, '--file-mode', '0600')
+      project.normalize_notary_key(key_file)
+      UI.message("Configuring notarization with #{config.fetch('APP_STORE_DEV_KEY_NAME')}.")
+      project.run('xcrun', 'notarytool', 'store-credentials', config.fetch('NOTARYTOOL_PROFILE'),
+                  '--key', key_file, '--key-id', config.fetch('APP_STORE_DEV_KEY_ID'),
+                  '--issuer', config.fetch('APP_STORE_DEV_KEY_ISSUER_ID'))
+    end
+    UI.success('Generated .env and stored notarization credentials in Keychain.')
+  end
+
+  desc 'Run Swift tests and offline release-workflow checks'
+  lane :test do
+    project.run('swift', 'test', '--force-resolved-versions')
+    release_tests
+  end
+
+  desc 'Check release behavior without signing or contacting GitHub'
+  lane :release_tests do
+    require_relative 'tests/release_checks'
+    MathReduceReleaseChecks.run
+  end
+
+  desc 'Build and verify a universal, ad-hoc signed service'
+  lane :build do
+    project.build
+  end
+
+  desc 'Build and install the service in ~/Library/Services'
+  lane :install do
+    project.install(build)
+  end
+
+  desc 'Remove installed copies of Math Reduce and refresh Services'
+  lane :uninstall do
+    project.uninstall
+  end
+
+  desc 'Build, sign, notarize, and staple a release DMG without publishing'
+  lane :package do
+    project.package
+  end
+
+  desc 'Release the current or a bumped version to GitHub'
+  lane :release do |options|
+    UI.user_error!('An unfinished release exists. Run just resume.') if project.state && !project.state['complete']
+    ensure_git_status_clean
+    project.check_origin
+    repo = github_request(path: "repos/#{project.repository}")
+    branch = repo.fetch('default_branch')
+    ensure_git_branch(branch: branch)
+    project.run('git', 'fetch', 'origin', branch, '--tags')
+    parent = project.run('git', 'rev-parse', 'HEAD')
+    UI.user_error!('Push or pull the default branch before releasing.') unless parent == project.run('git', 'rev-parse', "origin/#{branch}")
+    target = project.next_version(options.fetch(:bump, 'patch'))
+    UI.user_error!("Tag v#{target} already exists.") if git_tag_exists(tag: "v#{target}")
+    project.check_signing
+    test
+
+    originals = MathReduceProject::VERSION_FILES.to_h { |file| [file, File.binread(project.path(file))] }
+    begin
+      %w[CFBundleShortVersionString CFBundleVersion].each do |key|
+        plist = project.path('Resources/Info.plist')
+        set_info_plist_value(path: plist, key: key, value: target) unless get_info_plist_value(path: plist, key: key) == target
+      end
+      metadata = JSON.parse(originals.fetch('codemeta.json'))
+      if metadata['version'] != target
+        metadata['version'] = target
+        File.write(project.path('codemeta.json'), JSON.pretty_generate(metadata) + "\n")
+      end
+      dmg = package
+      project.save_state({
+        'schema' => 1, 'version' => target, 'repository' => project.repository, 'branch' => branch,
+        'parent' => parent, 'asset' => File.basename(dmg), 'sha256' => project.digest(dmg),
+        'files' => MathReduceProject::VERSION_FILES.to_h { |file| [file, project.digest(project.path(file))] }
+      })
+    rescue StandardError, Interrupt
+      originals.each { |file, contents| File.binwrite(project.path(file), contents) }
+      raise
+    end
+    resume
+  end
+
+  desc 'Finish an interrupted release without rebuilding or bumping again'
+  lane :resume do
+    receipt = project.state
+    UI.user_error!('No interrupted release. Use just release first.') unless receipt
+    project.verify_state(receipt)
+    if receipt['complete']
+      UI.success("v#{receipt['version']} is already published to GitHub.")
+      next
+    end
+    tag = "v#{receipt.fetch('version')}"
+    head = project.run('git', 'rev-parse', 'HEAD')
+    if head == receipt['parent']
+      changed = project.run('git', 'diff', 'HEAD', '--name-only').lines.map(&:strip)
+      untracked = project.run('git', 'ls-files', '--others', '--exclude-standard')
+      UI.user_error!('Unexpected working-tree changes; restore the release tree before resuming.') unless (changed - MathReduceProject::VERSION_FILES).empty? && untracked.empty?
+      # Releasing the current version can tag the existing commit directly.
+      git_commit(path: MathReduceProject::VERSION_FILES, message: "Release: #{tag}") unless changed.empty?
+    else
+      committed_files = project.run('git', 'diff', receipt.fetch('parent'), 'HEAD', '--name-only').lines.map(&:strip)
+      unless project.run('git', 'rev-parse', 'HEAD^') == receipt['parent'] &&
+             project.run('git', 'log', '-1', '--format=%s') == "Release: #{tag}" &&
+             (committed_files - MathReduceProject::VERSION_FILES).empty?
+        UI.user_error!('HEAD changed since the release was built.')
+      end
+    end
+    ensure_git_status_clean
+    commit = project.run('git', 'rev-parse', 'HEAD')
+    add_git_tag(tag: tag, message: "Release: #{tag}", commit: commit) unless git_tag_exists(tag: tag)
+    UI.user_error!('The release tag points at a different commit.') unless project.run('git', 'rev-parse', "#{tag}^{commit}") == commit
+    # push_to_git_remote pushes all tags and has no atomic-push option.
+    project.run('git', 'push', '--atomic', 'origin', "HEAD:refs/heads/#{receipt['branch']}", "refs/tags/#{tag}")
+    publish_github(receipt: receipt, commit: commit)
+    project.verify_github_asset(receipt['version'], expected_sha: receipt['sha256'])
+    project.save_state(receipt.merge('complete' => true))
+    UI.success("Released https://github.com/#{project.repository}/releases/tag/#{tag}")
+  end
+
+  private_lane :github_request do |options|
+    response = github_api(
+      api_token: project.token, http_method: options.fetch(:method, 'GET'), path: options.fetch(:path),
+      body: options.fetch(:body, {}),
+      error_handlers: {
+        404 => proc { UI.user_error!('GitHub resource not found.') unless options[:allow_missing] },
+        '*' => proc { |result| UI.user_error!("GitHub request failed (HTTP #{result[:status]}).") }
+      }
+    )
+    response[:status] == 404 ? nil : response[:json]
+  end
+
+  private_lane :publish_github do |options|
+    receipt = options.fetch(:receipt)
+    tag = "v#{receipt.fetch('version')}"
+    dmg = project.path("dist/#{receipt.fetch('asset')}")
+    checksum = dmg + '.sha256'
+    File.write(checksum, "#{receipt.fetch('sha256')}  #{File.basename(dmg)}\n")
+    # Query by tag; get_github_release only searches the first page of releases.
+    existing = github_request(path: "repos/#{project.repository}/releases/tags/#{tag}", allow_missing: true)
+    if existing
+      UI.user_error!('The existing GitHub release is marked as a prerelease.') if existing['prerelease']
+      if existing['draft']
+        project.run('gh', 'release', 'upload', tag, dmg, checksum, '--repo', project.repository, '--clobber')
+      end
+    else
+      existing = set_github_release(
+        repository_name: project.repository, api_token: project.token, tag_name: tag, name: tag,
+        commitish: options.fetch(:commit), is_draft: true, is_generate_release_notes: true,
+        upload_assets: [dmg, checksum]
+      )
+      UI.user_error!('Release creation failed. Run just resume to retry.') unless existing
+    end
+    if existing['draft']
+      github_request(path: "repos/#{project.repository}/releases/#{existing.fetch('id')}", method: 'PATCH',
+                     body: { draft: false, make_latest: 'true' })
+    end
+  end
+end
