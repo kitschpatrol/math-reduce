@@ -7,7 +7,7 @@
 //
 
 // Helpful tutorial on packaging apps as services:
-// http://www.notesfromandy.com/2013/04/05/writing-a-service-bundle/
+// https://www.notesfromandy.com/2013/04/05/writing-a-service-bundle/
 
 // Template project:
 // https://github.com/aglee/copyselector

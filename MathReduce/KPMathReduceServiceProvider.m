@@ -22,7 +22,7 @@
 		return;
 	}
 
-	// Get and encrypt the string.
+	// Get the string.
 	NSString *pboardString = [pboard stringForType:NSPasteboardTypeString];
 	NSError *mathError = nil;
 	DDExpression *expression = [DDExpression expressionFromString:pboardString error:&mathError];
