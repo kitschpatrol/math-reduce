@@ -10,6 +10,8 @@ require 'tmpdir'
 # The parts specific to a SwiftPM-built .service bundle. Fastfile owns the release flow.
 class MathReduceProject
   VERSION_FILES = ['Resources/Info.plist', 'codemeta.json'].freeze
+  LSREGISTER = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
+  PBS = '/System/Library/CoreServices/pbs'
   attr_reader :root
 
   def initialize(root, fastfile)
@@ -200,10 +202,27 @@ class MathReduceProject
     run('sudo', '/bin/rm', '-R', '--', bundle)
   end
 
+  def registered_services
+    # NSWorkspace's application lookup omits some old/temporary copies that pbs
+    # still uses as service providers. Read every matching Launch Services record.
+    registrations = run(LSREGISTER, '-dump', log: false)
+    registrations.split(/^-{20,}\s*$/).filter_map do |record|
+      next unless record.match?(/^identifier:[ \t]+com\.kitschpatrol\.MathReduce[ \t]*$/i)
+
+      bundle = record[/^path:[ \t]+(.+)$/, 1]&.sub(/[ \t]+\(0x[0-9a-f]+\)[ \t]*$/i, '')
+      # Confirm the on-disk identity before unregistering a potentially stale path.
+      bundle if bundle&.start_with?('/') && File.directory?(bundle) && math_reduce_service?(bundle)
+    end.uniq
+  end
+
   def uninstall
     brew = homebrew
     if brew && run(brew, 'list', '--cask', '-1', log: false).lines.map(&:strip).include?('math-reduce')
       run(brew, 'uninstall', '--cask', 'math-reduce')
+    end
+    registered_services.each do |bundle|
+      FastlaneCore::UI.message("Unregistering #{bundle}")
+      run(LSREGISTER, '-u', bundle)
     end
     service_directories.each do |directory|
       next unless File.directory?(directory)
@@ -215,8 +234,9 @@ class MathReduceProject
         remove_service(bundle) if math_reduce_service?(bundle)
       end
     end
-    # Use AppKit directly so uninstall needs neither a build nor an installed binary.
-    run('/usr/bin/osascript', '-l', 'JavaScript', '-e', 'ObjC.import("AppKit"); $.NSUpdateDynamicServices();')
+    # Refresh after unregistering all copies, including builds and mounted DMGs.
+    # No service executable is launched, which would register that copy again.
+    run(PBS, '-update')
     FastlaneCore::UI.success('Math Reduce uninstalled. Quit and reopen apps to refresh their Services menus.')
   end
 

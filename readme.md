@@ -4,10 +4,12 @@
 
 <!-- /title -->
 
-<!-- badges -->
+<!-- badges({ githubRelease: true, custom: { Homebrew: { image: "https://img.shields.io/badge/Homebrew-kitschpatrol%2Ftap%2Fmath--reduce-FBB040?logo=homebrew&logoColor=white", link: "https://github.com/kitschpatrol/homebrew-tap/blob/main/Casks/math-reduce.rb" } } }) -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit)
 [![CI](https://github.com/kitschpatrol/math-reduce/actions/workflows/ci.yml/badge.svg)](https://github.com/kitschpatrol/math-reduce/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/kitschpatrol/math-reduce?label=Release)](https://github.com/kitschpatrol/math-reduce/releases/latest)
+[![Homebrew](https://img.shields.io/badge/Homebrew-kitschpatrol%2Ftap%2Fmath--reduce-FBB040?logo=homebrew\&logoColor=white)](https://github.com/kitschpatrol/homebrew-tap/blob/main/Casks/math-reduce.rb)
 
 <!-- /badges -->
 
@@ -62,6 +64,8 @@ For a manual installation:
 ```sh
 rm -rf ~/Library/Services/MathReduce.service
 ```
+
+Eject any mounted Math Reduce disk image, then quit and reopen applications to refresh their Services menus. Development builds can also supply the service; see the [development guide](docs/development.md) for removing their registrations.
 
 ## Usage
 

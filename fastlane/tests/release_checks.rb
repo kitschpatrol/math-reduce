@@ -130,8 +130,13 @@ class MathReduceReleaseChecks
       File.chmod(0o755, File.dirname(args.last))
       FileUtils.remove_entry(args.last)
       ''
-    when %w[/usr/bin/osascript -l]
-      expect(args == ['/usr/bin/osascript', '-l', 'JavaScript', '-e', 'ObjC.import("AppKit"); $.NSUpdateDynamicServices();'], 'Wrong Services refresh')
+    when [MathReduceProject::LSREGISTER, '-dump']
+      @registrations || ''
+    when [MathReduceProject::LSREGISTER, '-u']
+      raise 'Unregister failed' if @fail_unregister
+      (@unregistered ||= []) << args.fetch(2)
+      ''
+    when [MathReduceProject::PBS, '-update']
       @refreshed_services = true
       ''
     when %w[ditto stub.service]
@@ -438,6 +443,34 @@ class MathReduceReleaseChecks
     execute(:uninstall)
     expect(!File.symlink?(link) && !File.symlink?(dangling), 'Uninstall left a service symlink')
     expect(File.file?(File.join(target, 'Contents/Info.plist')), 'Uninstall followed a symlink into a build')
+  end
+
+  def check_uninstall_unregisters_builds_and_mounted_copies
+    installed = service_fixture('UserServices', 'MathReduce.service')
+    build = service_fixture('dist', 'MathReduce.service')
+    mounted = service_fixture('Volumes/Math Reduce', 'MathReduce.service', binary: true)
+    old = service_fixture('Temporary Build', 'Renamed.service')
+    unrelated = service_fixture('Other', 'MathReduce.service', identifier: 'example.other-service')
+    missing = @project.path('Missing/MathReduce.service')
+    @registrations = [installed, build, mounted, old, unrelated, missing, build].map do |bundle|
+      # Include a stale record whose on-disk bundle now belongs to another app.
+      "#{'-' * 80}\nbundle id: Math Reduce (0x123)\npath: #{bundle} (0x456)\nidentifier: com.kitschpatrol.MathReduce\n"
+    end.join
+    @registrations += "#{'-' * 80}\npath: #{unrelated} (0x789)\nidentifier: example.other-service\n"
+    execute(:uninstall)
+    expect(@unregistered == [installed, build, mounted, old], 'Uninstall missed a provider or unregistered an unrelated bundle')
+    expect(!File.exist?(installed), 'Uninstall left the installed copy')
+    [build, mounted, old, unrelated].each { |bundle| expect(File.directory?(bundle), 'Uninstall deleted a non-installed bundle') }
+    refresh_index = @commands.index([MathReduceProject::PBS, '-update'])
+    expect(refresh_index && @commands.each_index.all? { |i| @commands[i].take(2) != [MathReduceProject::LSREGISTER, '-u'] || i < refresh_index }, 'Services refreshed before unregistering providers')
+  end
+
+  def check_uninstall_stops_when_unregistering_fails
+    build = service_fixture('dist', 'MathReduce.service')
+    @registrations = "#{'-' * 80}\npath: #{build} (0x123)\nidentifier: com.kitschpatrol.MathReduce\n"
+    @fail_unregister = true
+    expect_failure('Unregister failed') { execute(:uninstall) }
+    expect(!@refreshed_services && File.directory?(build), 'Failed unregister claimed success or removed the build')
   end
 
   def check_uninstall_uses_homebrew_and_allows_repeated_runs

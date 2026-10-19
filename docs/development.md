@@ -21,7 +21,9 @@ To remove existing installations from a source checkout:
 just uninstall
 ```
 
-`just uninstall` removes the Homebrew cask if installed, then removes Math Reduce bundles from `~/Library/Services` and `/Library/Services`, including renamed copies identified by their bundle ID. It refreshes Services without building anything. Removing a protected installation may prompt for your administrator password through `sudo`; run the recipe as your normal user. Other users' home folders and local build artifacts are left alone. Quit and reopen apps if their Services menus still show Math Reduce.
+`just uninstall` removes the Homebrew cask if installed, unregisters existing Math Reduce copies from Launch Services, then removes Math Reduce bundles from `~/Library/Services` and `/Library/Services`, including renamed copies identified by their bundle ID. It updates the Services cache with macOS's `pbs` tool without building or launching the service. Removing a protected installation may prompt for your administrator password through `sudo`; run the recipe as your normal user.
+
+macOS can register bundles outside the Services folders, including `dist/MathReduce.service`, temporary builds, and copies on mounted DMGs. The uninstaller unregisters these copies but preserves their files. This prevents macOS from falling back to a development build after the installed copy is removed. Other users' home folders are not deleted. Launching a preserved build or opening its disk image again can register it again; eject the Math Reduce DMG after installation or uninstallation. Quit and reopen apps if their Services menus still show a cached entry.
 
 You can smoke-test the bundled executable directly:
 
