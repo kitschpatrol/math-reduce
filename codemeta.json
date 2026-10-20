@@ -3,7 +3,7 @@
   "@type": "SoftwareSourceCode",
   "name": "Math Reduce",
   "identifier": "com.kitschpatrol.MathReduce",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A system-wide macOS service that turns any text field into a calculator.",
   "author": {
     "@type": "Person",
@@ -11,9 +11,18 @@
     "name": "Eric Mika",
     "url": "https://ericmika.com"
   },
-  "keywords": ["macos", "swift", "calculator", "service", "text", "utility"],
+  "keywords": [
+    "macos",
+    "swift",
+    "calculator",
+    "service",
+    "text",
+    "utility"
+  ],
   "programmingLanguage": "Swift",
-  "operatingSystem": ["macOS 15 or later"],
+  "operatingSystem": [
+    "macOS 15 or later"
+  ],
   "url": "https://github.com/kitschpatrol/math-reduce",
   "codeRepository": "https://github.com/kitschpatrol/math-reduce.git",
   "issueTracker": "https://github.com/kitschpatrol/math-reduce/issues",
