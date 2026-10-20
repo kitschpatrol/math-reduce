@@ -4,7 +4,7 @@
   "name": "Math Reduce",
   "identifier": "com.kitschpatrol.MathReduce",
   "version": "1.0.0",
-  "description": "A system-wide macOS service to turn any text field into a calculator.",
+  "description": "A system-wide macOS service that turns any text field into a calculator.",
   "author": {
     "@type": "Person",
     "email": "eric@ericmika.com",

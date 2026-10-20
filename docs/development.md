@@ -32,7 +32,7 @@ dist/MathReduce.service/Contents/MacOS/MathReduce --evaluate '2**10'
 dist/MathReduce.service/Contents/MacOS/MathReduce --version
 ```
 
-`just test` runs Swift Testing suites for expression compatibility and the pasteboard callback, plus offline fastlane release checks in disposable Git repositories. Those checks replace Apple and GitHub calls, so they need no credentials or network. `just format` formats Swift and runs `mdat expand readme.md` to refresh generated sections, including badges. `just lint` checks Swift formatting and runs `mdat check readme.md` to detect stale generated content without changing files. CI runs the tests and universal bundle build on Sequoia.
+`just test` runs Swift Testing suites for expression compatibility, expressions in prose, rich text, and the pasteboard callback, including a seeded fuzz test, plus offline fastlane release checks in disposable Git repositories. Those checks replace Apple and GitHub calls, so they need no credentials or network. `just format` formats Swift and runs `mdat expand readme.md` to refresh generated sections, including badges. `just lint` checks Swift formatting and runs `mdat check readme.md` to detect stale generated content without changing files. Both MDAT commands need network access, because `mdat.config.ts` embeds the operators table and function names from the [DDMathParser wiki](https://github.com/davedelong/DDMathParser/wiki) (`Basic/Operators.md` and `Basic/Functions.md`). CI runs the tests and universal bundle build on Sequoia.
 
 Most `just` recipes invoke fastlane lanes. You can also use `fastlane mac build`, `fastlane mac test`, or `fastlane lanes` directly. The Homebrew fastlane installation supplies Ruby and the required gems; no separate Bundler setup or fastlane plugins are needed.
 
@@ -54,7 +54,7 @@ In `Resources/Info.plist`, `CFBundleDisplayName` and `CFBundleName` contain the 
 
 ## Layout
 
-- `Sources/MathReduceCore`: evaluation wrapper and the Objective-C-visible Services callback, isolated to the main actor.
+- `Sources/MathReduceCore`: evaluation wrapper, the scanner for expressions in prose, and the Objective-C-visible Services callback, isolated to the main actor.
 - `Sources/MathReduce`: the short-lived background service entry point and diagnostic commands.
 - `Resources`: service metadata and DDMathParser's license.
 - `Tests`: Swift Testing suites.
@@ -63,10 +63,37 @@ In `Resources/Info.plist`, `CFBundleDisplayName` and `CFBundleName` contain the 
 - `fastlane/tests`: offline checks for versioning, release failures, and recovery.
 - `Resources/Info.plist`: the authoritative release version in `CFBundleShortVersionString`, with `CFBundleVersion` bumped to match. The release lane also updates `codemeta.json`.
 - `scrapbook`: the original Automator prototype and design notes.
+- `mdat.config.ts`: MDAT rules for generated readme content beyond the bundled rules.
 
 DDMathParser is consumed as the upstream `MathParser` SPM product. `Package.swift` pins revision `2e067fc17c36f4298649b6681d52286fe4ca388e`, which includes fixes after the `3.1.0` tag, notably factorials above 20. `Package.resolved` is committed. To update it, change the revision, run `swift package resolve`, and run the tests.
 
 `EvaluationCompatibility` uses DDMathParser's function override API to guard unsafe bitwise integer conversions, reject oversized factorials, and correct its `max`, `median`, and double-factorial edge cases. Operand expressions are evaluated once; validated values are passed back to the upstream evaluator where possible. These workarounds are covered by regression tests and can be removed when equivalent upstream fixes are available. Inputs are capped at 4 KiB of UTF-8 text before entering the recursive parser, preventing stack overflow and excessive parsing time from large selections.
+
+## Expressions in text
+
+The selection can include surrounding text. Math Reduce replaces each expression it finds and leaves everything else as written:
+
+| Selection                                     | Result                                           |
+| --------------------------------------------- | ------------------------------------------------ |
+| `It bakes PI * 1 + 23.22712957677745 tested.` | `It bakes 26.36872223036724 tested.`             |
+| `This is 1 + 1 my way or the PI way.`         | `This is 2 my way or the 3.141592653589793 way.` |
+| `x = (1920 - 2 * 160) / 2, y = 2**10;`        | `x = 800, y = 1024;`                             |
+
+`MathReducer` splits a selection into lines, because DDMathParser reads a line break as a space and would multiply adjacent lines: `1 + 1⏎1 + 1` would evaluate as 1 + 1 × 1 + 1. An expression broken across lines is not joined back together. A single line that is entirely an expression is evaluated as DDMathParser reads it, so `10-3`, `17 % 5`, `45°`, `5!`, and `e` work when selected by themselves.
+
+Otherwise, `ExpressionScanner` tokenizes each line with DDMathParser's `Tokenizer`, after splitting off prose punctuation that would otherwise start quoted variables or join identifiers, and finds runs of math bounded by words and punctuation. Each run is evaluated whole or left alone, after trimming only edges that cannot change its value, such as unmatched prose parentheses or sentence punctuation. Trimming further could change the meaning of an incomplete expression: `2 + 3 * x` must not become `5 * x`.
+
+Where prose and DDMathParser disagree, the scanner favors prose. A missed expression is easy to notice and select directly, but a wrong replacement could go unnoticed:
+
+- Numbers that are already reduced stay as written, including dates, times, versions, phone numbers, and ranges such as `2026-10-19`, `10:30`, `1.2.3`, `555-1234`, and `pages 10-20`. Subtraction between numbers in prose needs spaces, as in `10 - 3`.
+- Math touching a word belongs to it, as in `f(2)`, `5kg`, or `Total:2+2`.
+- `%`, `°`, and `~` read as percentages, degrees, and approximations, and comparisons read as statements: `So 2 + 2 = 4` becomes `So 4 = 4`.
+- Constants such as `pi` and `tau` are replaced on their own. Euler's number and functions that accept no arguments need parentheses, as in `e()` or `sum(1, 2)`, since `e`, `yes`, `no`, and `sum` are ordinary words.
+- A trailing `!` or `.` ends the sentence: `That is 2 + 3!` becomes `That is 5!`.
+- A sign after a word keeps its spacing, since it may join the expression to that word: `x - 5 + 2` becomes `x - 3`.
+- List markers such as `- `, `* `, and `1. ` stay in place.
+
+The service accepts and returns RTF and flat RTFD as well as plain text, because Services replace the whole selection and text around an expression must keep its formatting. `ServiceProvider` uses the richest representation whose text matches the plain-text selection, and each result takes the formatting of its expression's first character. Apps built on the standard macOS text system, such as TextEdit, provide rich text. In apps that exchange only plain text with Services, the result takes the formatting at the start of the selection. RTF drops attachments, so a selection whose only faithful representation is plain text with an attachment placeholder is left unchanged.
 
 # Releases
 
